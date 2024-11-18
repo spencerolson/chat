@@ -15,6 +15,14 @@ defmodule Chat.Server do
     GenServer.cast(__MODULE__, {:handle_input, input})
   end
 
+  def message_all(msg) do
+    GenServer.abcast(__MODULE__, {:add_message, msg})
+  end
+
+  def message_me(msg) do
+    GenServer.cast(__MODULE__, {:add_message, msg})
+  end
+
   @impl true
   def init(_) do
     :timer.apply_after(@refresh_interval, __MODULE__, :print, [])
@@ -80,7 +88,7 @@ defmodule Chat.Server do
     login <name> - login to the chat with name. Tries to infer host from `ipconfig getifaddr en0`.\r
     login - login to the chat with name 'noname'. Tries to infer host from `ipconfig getifaddr en0`.\r
 
-    connect <name>@<host> - connect to another user. Connecting to a single user automatically connects to all users in the network.\r
+    connect <name>@<host> - connect to another user. Connecting to a single user automatically connects to all users in the cluster.\r
 
     users - list connected users.\r
 
@@ -88,7 +96,7 @@ defmodule Chat.Server do
     """
 
     msg = {"SYSTEM", :green, help_message}
-    GenServer.abcast(__MODULE__, {:add_message, msg})
+    message_all(msg)
   end
 
   defp process_input(%{input: "login"}), do: process_input(%{input: "login "})
@@ -99,36 +107,29 @@ defmodule Chat.Server do
       {:ok, _} ->
         Node.set_cookie(:monster)
         msg = {"SYSTEM", :green, "'#{node_name}' logged in"}
-        GenServer.abcast(__MODULE__, {:add_message, msg})
+        message_me(msg)
       {:error, _} ->
         msg = {"SYSTEM", :red, "Failed to start node with name '#{node_name}'"}
-        GenServer.abcast(__MODULE__, {:add_message, msg})
+        message_me(msg)
     end
   end
 
   defp process_input(%{input: "logout"}) do
-    username = user()
-    case Node.stop() do
-      :ok ->
-        msg = {"SYSTEM", :green, "#{username} disconnected"}
-        GenServer.abcast(__MODULE__, {:add_message, msg})
-      _ ->
-        msg = {"SYSTEM", :red, "#{username} failed to disconnect"}
-        GenServer.abcast(__MODULE__, {:add_message, msg})
-    end
+    message_all({"SYSTEM", :green, "#{user()} disconnected"}) # TODO: send this after the node is stopped.
+    Node.stop()
   end
 
   defp process_input(%{input: "connect " <> node_name}) do
     case Node.connect(String.to_atom(node_name)) do
       true ->
-        msg = {"SYSTEM", :green, "'#{user()}' connected to '#{node_name}'"}
-        GenServer.abcast(__MODULE__, {:add_message, msg})
+        msg = {"SYSTEM", :green, "'#{user()}' connected to the cluster"}
+        message_all(msg)
       false ->
-        msg = {"SYSTEM", :red, "'#{user()}' failed to connect to '#{node_name}'"}
-        GenServer.abcast(__MODULE__, {:add_message, msg})
+        msg = {"SYSTEM", :red, "'#{user()}' failed to connect to the cluster"}
+        message_me(msg)
       :ignored ->
         msg = {"SYSTEM", :red, "Must login first"}
-        GenServer.abcast(__MODULE__, {:add_message, msg})
+        message_me(msg)
     end
   end
 
@@ -141,17 +142,17 @@ defmodule Chat.Server do
       end)
 
     msg = {"SYSTEM", :green, text}
-    GenServer.abcast(__MODULE__, {:add_message, msg})
+    message_me(msg)
   end
 
   defp process_input(state) do
     case Node.alive?() do
       true ->
         msg = {user(), :blue, state.input}
-        GenServer.abcast(__MODULE__, {:add_message, msg})
+        message_all(msg)
       false ->
         msg = {"SYSTEM", :red, "Must login first"}
-        GenServer.abcast(__MODULE__, {:add_message, msg})
+        message_me(msg)
     end
   end
 
