@@ -51,7 +51,7 @@ defmodule Chat.Server do
 
     IO.write(IO.ANSI.format([
       IO.ANSI.cursor_down(height - Enum.count(state.messages)),
-      :green,
+      :yellow,
       state.input
     ]))
     :timer.apply_after(@refresh_interval, __MODULE__, :print, [])
@@ -69,6 +69,26 @@ defmodule Chat.Server do
       _ ->
         {:noreply, %{state | input: state.input <> input}}
     end
+  end
+
+  defp process_input(%{input: "help"}) do
+    help_message = """
+    Commands:\r
+    help - show this message.\r
+
+    login <name>@<host> - login to the chat with name and host.\r
+    login <name> - login to the chat with name. Tries to infer host from `ipconfig getifaddr en0`.\r
+    login - login to the chat with name 'noname'. Tries to infer host from `ipconfig getifaddr en0`.\r
+
+    connect <name>@<host> - connect to another user. Connecting to a single user automatically connects to all users in the network.\r
+
+    users - list connected users.\r
+
+    logout - logout from the chat.\r
+    """
+
+    msg = {"SYSTEM", :green, help_message}
+    GenServer.abcast(__MODULE__, {:add_message, msg})
   end
 
   defp process_input(%{input: "login"}), do: process_input(%{input: "login "})
@@ -110,6 +130,18 @@ defmodule Chat.Server do
         msg = {"SYSTEM", :red, "Must login first"}
         GenServer.abcast(__MODULE__, {:add_message, msg})
     end
+  end
+
+  defp process_input(%{input: "users"}) do
+    text =
+      [node() | Node.list()]
+      |> Enum.reduce("Connected Users:\r\n", fn node, acc ->
+        line = "- #{node}#{if Node.self() == node, do: " (you)", else: ""}\r\n"
+        acc <> line
+      end)
+
+    msg = {"SYSTEM", :green, text}
+    GenServer.abcast(__MODULE__, {:add_message, msg})
   end
 
   defp process_input(state) do
