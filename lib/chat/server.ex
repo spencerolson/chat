@@ -23,14 +23,13 @@ defmodule Chat.Server do
 
   @impl true
   def handle_info({:io_request, from, reply_as, {:put_chars, :unicode, msg}}, state) do
-    msgs = [{stamp(), msg} | state.messages]
+    msgs = [{user(), msg} | state.messages]
     send(from, {:io_reply, reply_as, :ok})
     {:noreply, %{ state | messages: msgs}}
   end
 
-  defp stamp do
+  defp user do
     Node.self() |> Atom.to_string()
-    # DateTime.utc_now() |> Calendar.strftime("[%0H:%0M:%0S]")
   end
 
   @impl true
@@ -72,10 +71,14 @@ defmodule Chat.Server do
     end
   end
 
-  defp process_input(%{input: "login " <> node_name}) do
+  defp process_input(%{input: "login"}), do: process_input(%{input: "login "})
+
+  defp process_input(%{input: "login " <> login_as}) do
+    node_name = get_node_name(login_as)
     case Node.start(String.to_atom(node_name)) do
       {:ok, _} ->
-        msg = {"SYSTEM", :green, "Logged in as '#{node_name}'"}
+        Node.set_cookie(:monster)
+        msg = {"SYSTEM", :green, "'#{node_name}' logged in"}
         GenServer.abcast(__MODULE__, {:add_message, msg})
       {:error, _} ->
         msg = {"SYSTEM", :red, "Failed to start node with name '#{node_name}'"}
@@ -83,19 +86,56 @@ defmodule Chat.Server do
     end
   end
 
+  defp process_input(%{input: "logout"}) do
+    username = user()
+    case Node.stop() do
+      :ok ->
+        msg = {"SYSTEM", :green, "#{username} disconnected"}
+        GenServer.abcast(__MODULE__, {:add_message, msg})
+      _ ->
+        msg = {"SYSTEM", :red, "#{username} failed to disconnect"}
+        GenServer.abcast(__MODULE__, {:add_message, msg})
+    end
+  end
+
   defp process_input(%{input: "connect " <> node_name}) do
     case Node.connect(String.to_atom(node_name)) do
       true ->
-        msg = {"SYSTEM", :green, "Connected to #{node_name}"}
+        msg = {"SYSTEM", :green, "'#{user()}' connected to '#{node_name}'"}
         GenServer.abcast(__MODULE__, {:add_message, msg})
       false ->
-        msg = {"SYSTEM", :red, "Failed to connect to #{node_name}"}
+        msg = {"SYSTEM", :red, "'#{user()}' failed to connect to '#{node_name}'"}
+        GenServer.abcast(__MODULE__, {:add_message, msg})
+      :ignored ->
+        msg = {"SYSTEM", :red, "Must login first"}
         GenServer.abcast(__MODULE__, {:add_message, msg})
     end
   end
 
   defp process_input(state) do
-    msg = {stamp(), :blue, state.input}
-    GenServer.abcast(__MODULE__, {:add_message, msg})
+    case Node.alive?() do
+      true ->
+        msg = {user(), :blue, state.input}
+        GenServer.abcast(__MODULE__, {:add_message, msg})
+      false ->
+        msg = {"SYSTEM", :red, "Must login first"}
+        GenServer.abcast(__MODULE__, {:add_message, msg})
+    end
+  end
+
+  defp get_node_name(login_as) do
+    case String.split(login_as, "@") do
+      [_, _] -> login_as
+      [""] -> "noname@#{get_host()}"
+      [name] -> "#{name}@#{get_host()}"
+      _ -> "noname@#{get_host()}"
+    end
+  end
+
+  defp get_host do
+    case System.cmd("ipconfig", ["getifaddr", "en0"]) do
+      {host, 0} -> String.trim(host)
+      _ -> "localhost"
+    end
   end
 end
