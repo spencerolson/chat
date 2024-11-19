@@ -7,12 +7,12 @@ defmodule Chat.Getch do
     loop(nil)
   end
 
-  def loop("q") do
-    IO.write(Chat.Server, "Done!")
-    # :io.put_chars("\e[?25h") # Show the cursor
-    :io.put_chars("\e[?1049l") # Disable alternate screen buffer
-    System.halt(0)
-  end
+  # def loop("q") do
+  #   IO.write(Chat.Server, "Done!")
+  #   # :io.put_chars("\e[?25h") # Show the cursor
+  #   :io.put_chars("\e[?1049l") # Disable alternate screen buffer
+  #   System.halt(0)
+  # end
 
   def loop(last) do
     if last, do: print(last)

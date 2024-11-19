@@ -26,7 +26,7 @@ defmodule Chat.Server do
   @impl true
   def init(_) do
     :timer.apply_after(@refresh_interval, __MODULE__, :print, [])
-    {:ok, %{messages: [], input: ""}}
+    {:ok, %{messages: [], input: "", color: :yellow}}
   end
 
   @impl true
@@ -50,20 +50,30 @@ defmodule Chat.Server do
     # {:ok, width} = :io.columns()
     {:ok, height} = :io.rows()
 
-    IO.write(IO.ANSI.format([IO.ANSI.clear(), "\e[5;0H"]))
+    IO.write(IO.ANSI.format([IO.ANSI.clear(), "\e[5;0H", IO.ANSI.reset()]))
     state.messages
     |> Enum.reverse()
     |> Enum.each(fn {tstamp, color, msg} ->
-      IO.write(IO.ANSI.format([tstamp, ": ", color, msg, "\r\n"]))
+      IO.write(IO.ANSI.format([tstamp, ": ", color(color), msg, "\r\n", IO.ANSI.reset()]))
     end)
 
     IO.write(IO.ANSI.format([
       IO.ANSI.cursor_down(height - Enum.count(state.messages)),
-      :yellow,
-      state.input
+      color(state.color),
+      "> " <> state.input,
+      IO.ANSI.reset()
     ]))
     :timer.apply_after(@refresh_interval, __MODULE__, :print, [])
     {:noreply, state}
+  end
+
+  defp color(code) when is_integer(code), do: IO.ANSI.color(code)
+  defp color(name) when is_atom(name), do: name
+
+  @impl true
+  def handle_cast({:set_color, color}, state) do
+    message_me({"SYSTEM", color, "Color changed to #{color}.\n"})
+    {:noreply, %{state | color: color}}
   end
 
   @impl true
@@ -92,11 +102,21 @@ defmodule Chat.Server do
 
     users - list connected users.\r
 
+    color <color code> - set the color of your messages. Color code is an integer between 0 and 255, inclusive.\r
+
     logout - logout from the chat.\r
     """
 
     msg = {"SYSTEM", :green, help_message}
-    message_all(msg)
+    message_me(msg)
+  end
+
+  defp process_input(%{input: "color " <> code_str}) do
+    case Integer.parse(code_str) do
+      {code, ""} when code in 0..255 ->
+        GenServer.cast(__MODULE__, {:set_color, code})
+        _ -> message_me({"SYSTEM", :red, "Invalid color code. Please enter a number between 0 and 255, inclusive.\n"})
+    end
   end
 
   defp process_input(%{input: "login"}), do: process_input(%{input: "login "})
@@ -106,29 +126,29 @@ defmodule Chat.Server do
     case Node.start(String.to_atom(node_name)) do
       {:ok, _} ->
         Node.set_cookie(:monster)
-        msg = {"SYSTEM", :green, "'#{node_name}' logged in"}
+        msg = {"SYSTEM", :green, "'#{node_name}' logged in\n"}
         message_me(msg)
       {:error, _} ->
-        msg = {"SYSTEM", :red, "Failed to start node with name '#{node_name}'"}
+        msg = {"SYSTEM", :red, "Failed to start node with name '#{node_name}'\n"}
         message_me(msg)
     end
   end
 
   defp process_input(%{input: "logout"}) do
-    message_all({"SYSTEM", :green, "#{user()} disconnected"}) # TODO: send this after the node is stopped.
+    message_all({"SYSTEM", :green, "#{user()} disconnected\n"}) # TODO: send this after the node is stopped.
     Node.stop()
   end
 
   defp process_input(%{input: "connect " <> node_name}) do
     case Node.connect(String.to_atom(node_name)) do
       true ->
-        msg = {"SYSTEM", :green, "'#{user()}' connected to the cluster"}
+        msg = {"SYSTEM", :green, "'#{user()}' connected to the cluster\n"}
         message_all(msg)
       false ->
-        msg = {"SYSTEM", :red, "'#{user()}' failed to connect to the cluster"}
+        msg = {"SYSTEM", :red, "'#{user()}' failed to connect to the cluster\n"}
         message_me(msg)
       :ignored ->
-        msg = {"SYSTEM", :red, "Must login first"}
+        msg = {"SYSTEM", :red, "Must login first. Type 'help' for more info.\n"}
         message_me(msg)
     end
   end
@@ -148,10 +168,10 @@ defmodule Chat.Server do
   defp process_input(state) do
     case Node.alive?() do
       true ->
-        msg = {user(), :blue, state.input}
+        msg = {user(), state.color, state.input}
         message_all(msg)
       false ->
-        msg = {"SYSTEM", :red, "Must login first"}
+        msg = {"SYSTEM", :red, "Must login first. Type 'help' for more info.\n"}
         message_me(msg)
     end
   end
