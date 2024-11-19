@@ -47,28 +47,10 @@ defmodule Chat.Server do
 
   @impl true
   def handle_cast(:print, state) do
-    # {:ok, width} = :io.columns()
-    {:ok, height} = :io.rows()
-
-    IO.write(IO.ANSI.format([IO.ANSI.clear(), "\e[5;0H", IO.ANSI.reset()]))
-    state.messages
-    |> Enum.reverse()
-    |> Enum.each(fn {tstamp, color, msg} ->
-      IO.write(IO.ANSI.format([tstamp, ": ", color(color), msg, "\r\n", IO.ANSI.reset()]))
-    end)
-
-    IO.write(IO.ANSI.format([
-      IO.ANSI.cursor_down(height - Enum.count(state.messages)),
-      color(state.color),
-      "> " <> state.input,
-      IO.ANSI.reset()
-    ]))
+    Chat.Screen.render(state)
     :timer.apply_after(@refresh_interval, __MODULE__, :print, [])
     {:noreply, state}
   end
-
-  defp color(code) when is_integer(code), do: IO.ANSI.color(code)
-  defp color(name) when is_atom(name), do: name
 
   @impl true
   def handle_cast({:set_color, color}, state) do
