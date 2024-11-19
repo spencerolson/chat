@@ -3,6 +3,21 @@ defmodule Chat.Server do
 
   @backspace "\d"
   @enter "\r"
+  @ignored [
+    "\t",    # tab
+    "\e",    # escape
+    "\e[A",  # arrow up
+    "\e[B",  # arrow down
+    "\e[C",  # arrow right
+    "\e[D",  # arrow left
+    "\e[F",  # end
+    "\e[H",  # home
+    "\e[1~", # home
+    "\e[3~", # delete
+    "\e[4~", # end
+    "\e[5~", # page up
+    "\e[6~"  # page down
+  ]
 
   def start_link(_) do
     GenServer.start_link(__MODULE__, nil, name: __MODULE__)
@@ -20,22 +35,33 @@ defmodule Chat.Server do
     GenServer.cast(__MODULE__, {:add_message, msg})
   end
 
-  @impl true
-  def init(_) do
-    state = %{messages: [], input: "", color: :yellow}
-    {:ok, state, {:continue, :render}}
+  def notify_connected(node_name) do
+    GenServer.cast({__MODULE__, node_name}, :connected)
   end
 
   @impl true
-  def handle_continue(:render, state) do
-    Chat.Screen.render(state)
-    {:noreply, state}
+  def init(_) do
+    state = %{state: "logged_out", messages: [], input: "", color: :yellow}
+    {:ok, state}
   end
 
   @impl true
   def handle_cast({:add_message, msg}, state) do
     state = %{state | messages: [msg | state.messages]}
     Chat.Screen.render(state)
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast(:connected, %{state: "connected"} = state) do
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast(:connected, state) do
+    state = %{state | state: "connected"}
+    Chat.Screen.render(state)
+    message_all({"SYSTEM", :green, "#{user()} connected to the cluster\n"})
     {:noreply, state}
   end
 
@@ -54,8 +80,13 @@ defmodule Chat.Server do
 
   @impl true
   def handle_cast({:handle_input, @enter}, state) do
-    handle_enter(state)
-    {:noreply, %{state | input: ""}}
+    state = handle_enter(state)
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast({:handle_input, input}, state) when input in @ignored do
+    {:noreply, state}
   end
 
   @impl true
@@ -65,7 +96,7 @@ defmodule Chat.Server do
     {:noreply, state}
   end
 
-  defp handle_enter(%{input: "help"}) do
+  defp handle_enter(%{input: "help"} = state) do
     help_message = """
     Commands:\r
     help - show this message.\r
@@ -84,46 +115,59 @@ defmodule Chat.Server do
     """
 
     message_me({"SYSTEM", :green, help_message})
-    :ok
+    %{state | input: ""}
   end
 
-  defp handle_enter(%{input: "color " <> code_str}) do
+  defp handle_enter(%{input: "color " <> code_str} = state) do
     case Integer.parse(code_str) do
       {code, ""} when code in 0..255 ->
         GenServer.cast(__MODULE__, {:set_color, code})
         _ -> message_me({"SYSTEM", :red, "Invalid color code. Please enter a number between 0 and 255, inclusive.\n"})
     end
-    :ok
+
+    %{state | input: ""}
   end
 
-  defp handle_enter(%{input: "login" <> login_as}) do
+  defp handle_enter(%{input: "login" <> login_as} = state) do
     node_name = login_as |> String.trim() |> get_node_name() |> String.to_atom()
     case Node.start(node_name) do
       {:ok, _} ->
         Node.set_cookie(:monster)
         message_me({"SYSTEM", :green, "'#{node_name}' logged in\n"})
+        %{state | input: "", state: "disconnected"}
       {:error, _} ->
         message_me({"SYSTEM", :red, "Failed to start node with name '#{node_name}'\n"})
+        %{state | input: ""}
     end
-    :ok
   end
 
-  defp handle_enter(%{input: "logout"}) do
+  defp handle_enter(%{input: "logout"} = state) do
     message_all({"SYSTEM", :green, "#{user()} disconnected\n"}) # TODO: send this after the node is stopped.
     Node.stop()
-    :ok
+
+    %{state | input: "", state: "logged_out"}
   end
 
-  defp handle_enter(%{input: "connect " <> node_name}) do
-    case Node.connect(String.to_atom(node_name)) do
-      true -> message_all({"SYSTEM", :green, "'#{user()}' connected to the cluster\n"})
-      false -> message_me({"SYSTEM", :red, "'#{user()}' failed to connect to the cluster\n"})
-      :ignored -> message_me({"SYSTEM", :red, "Must login first. Type 'help' for more info.\n"})
+  defp handle_enter(%{input: "connect " <> node_name_str} = state) do
+    node_name = String.to_atom(node_name_str)
+    case Node.connect(node_name) do
+      true ->
+        message_all({"SYSTEM", :green, "#{user()} connected to the cluster\n"})
+        notify_connected(node_name)
+        %{state | input: "", state: "connected"}
+
+      false ->
+        message_me({"SYSTEM", :red, "#{user()} failed to connect to the cluster\n"})
+        %{state | input: ""}
+
+      :ignored ->
+        message_me({"SYSTEM", :red, "Must login first. Type 'help' for more info.\n"})
+        %{state | input: ""}
     end
-    :ok
+
   end
 
-  defp handle_enter(%{input: "users"}) do
+  defp handle_enter(%{input: "users"} = state) do
     text =
       [node() | Node.list()]
       |> Enum.reduce("Connected Users:\r\n", fn node, acc ->
@@ -132,16 +176,22 @@ defmodule Chat.Server do
       end)
 
     message_me({"SYSTEM", :green, text})
-    :ok
+    %{state | input: ""}
   end
 
   defp handle_enter(state) do
-    if Node.alive?() do
-      message_all({user(), state.color, state.input})
-    else
-      message_me({"SYSTEM", :red, "Must login first. Type 'help' for more info.\n"})
+    cond do
+      String.trim(state.input) == "" ->
+        state
+
+      not Node.alive?() ->
+        message_me({"SYSTEM", :red, "Must login first. Type 'help' for more info.\n"})
+        %{state | input: ""}
+
+      true ->
+        message_all({user(), state.color, state.input})
+        %{state | input: ""}
     end
-    :ok
   end
 
   defp user do
