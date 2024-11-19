@@ -30,22 +30,24 @@ defmodule Chat.Screen do
       color(state.color),
       user,
       color(:yellow),
-      " | ",
-      state.state,
-      " | ",
+      " | " <> state.state,
       user_info(state),
-      "\r\n",
+      "\r\n\n",
       IO.ANSI.reset()
     ])
   end
 
-  defp user_info(%{state: "connected"}), do: "#{length(Node.list()) + 1} users online"
-  defp user_info(_), do: "type 'help' for more info"
+  defp user_info(%{state: "connected"}), do: " | #{length(Node.list()) + 1} users online"
+  defp user_info(_), do: ""
 
   defp print_messages(state) do
     state.messages
     |> Enum.reverse()
     |> Enum.each(&print_message/1)
+  end
+
+  defp print_message({"SYSTEM", color, text}) do
+    write([color(color), text, "\r\n", IO.ANSI.reset()])
   end
 
   defp print_message({name, color, text}) do
