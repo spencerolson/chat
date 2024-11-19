@@ -15,7 +15,6 @@ defmodule Chat.Screen do
   defp move_to_bottom(state) do
     {:ok, height} = :io.rows()
     lines_down = height - Enum.count(state.messages)
-
     lines_down
     |> IO.ANSI.cursor_down()
     |> IO.write()

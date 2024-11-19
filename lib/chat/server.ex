@@ -1,14 +1,11 @@
 defmodule Chat.Server do
   use GenServer
 
-  @refresh_interval 60
+  @backspace "\d"
+  @enter "\r"
 
   def start_link(_) do
     GenServer.start_link(__MODULE__, nil, name: __MODULE__)
-  end
-
-  def print do
-    GenServer.cast(__MODULE__, :print)
   end
 
   def handle_input(input) do
@@ -25,30 +22,20 @@ defmodule Chat.Server do
 
   @impl true
   def init(_) do
-    :timer.apply_after(@refresh_interval, __MODULE__, :print, [])
-    {:ok, %{messages: [], input: "", color: :yellow}}
+    state = %{messages: [], input: "", color: :yellow}
+    {:ok, state, {:continue, :render}}
   end
 
   @impl true
-  def handle_info({:io_request, from, reply_as, {:put_chars, :unicode, msg}}, state) do
-    msgs = [{user(), msg} | state.messages]
-    send(from, {:io_reply, reply_as, :ok})
-    {:noreply, %{ state | messages: msgs}}
-  end
-
-  defp user do
-    Node.self() |> Atom.to_string()
+  def handle_continue(:render, state) do
+    Chat.Screen.render(state)
+    {:noreply, state}
   end
 
   @impl true
   def handle_cast({:add_message, msg}, state) do
-    {:noreply, %{state | messages: [msg | state.messages]}}
-  end
-
-  @impl true
-  def handle_cast(:print, state) do
+    state = %{state | messages: [msg | state.messages]}
     Chat.Screen.render(state)
-    :timer.apply_after(@refresh_interval, __MODULE__, :print, [])
     {:noreply, state}
   end
 
@@ -59,19 +46,26 @@ defmodule Chat.Server do
   end
 
   @impl true
-  def handle_cast({:handle_input, input}, state) do
-    case input do
-      "\d" ->
-        {:noreply, %{state | input: String.slice(state.input, 0..-2//1)}}
-      "\r" ->
-        process_input(state)
-        {:noreply, %{state | input: ""}}
-      _ ->
-        {:noreply, %{state | input: state.input <> input}}
-    end
+  def handle_cast({:handle_input, @backspace}, state) do
+    state = %{state | input: String.slice(state.input, 0..-2//1)}
+    Chat.Screen.render(state)
+    {:noreply, state}
   end
 
-  defp process_input(%{input: "help"}) do
+  @impl true
+  def handle_cast({:handle_input, @enter}, state) do
+    handle_enter(state)
+    {:noreply, %{state | input: ""}}
+  end
+
+  @impl true
+  def handle_cast({:handle_input, input}, state) do
+    state = %{state | input: state.input <> input}
+    Chat.Screen.render(state)
+    {:noreply, state}
+  end
+
+  defp handle_enter(%{input: "help"}) do
     help_message = """
     Commands:\r
     help - show this message.\r
@@ -89,53 +83,47 @@ defmodule Chat.Server do
     logout - logout from the chat.\r
     """
 
-    msg = {"SYSTEM", :green, help_message}
-    message_me(msg)
+    message_me({"SYSTEM", :green, help_message})
+    :ok
   end
 
-  defp process_input(%{input: "color " <> code_str}) do
+  defp handle_enter(%{input: "color " <> code_str}) do
     case Integer.parse(code_str) do
       {code, ""} when code in 0..255 ->
         GenServer.cast(__MODULE__, {:set_color, code})
         _ -> message_me({"SYSTEM", :red, "Invalid color code. Please enter a number between 0 and 255, inclusive.\n"})
     end
+    :ok
   end
 
-  defp process_input(%{input: "login"}), do: process_input(%{input: "login "})
-
-  defp process_input(%{input: "login " <> login_as}) do
-    node_name = get_node_name(login_as)
-    case Node.start(String.to_atom(node_name)) do
+  defp handle_enter(%{input: "login" <> login_as}) do
+    node_name = login_as |> String.trim() |> get_node_name() |> String.to_atom()
+    case Node.start(node_name) do
       {:ok, _} ->
         Node.set_cookie(:monster)
-        msg = {"SYSTEM", :green, "'#{node_name}' logged in\n"}
-        message_me(msg)
+        message_me({"SYSTEM", :green, "'#{node_name}' logged in\n"})
       {:error, _} ->
-        msg = {"SYSTEM", :red, "Failed to start node with name '#{node_name}'\n"}
-        message_me(msg)
+        message_me({"SYSTEM", :red, "Failed to start node with name '#{node_name}'\n"})
     end
+    :ok
   end
 
-  defp process_input(%{input: "logout"}) do
+  defp handle_enter(%{input: "logout"}) do
     message_all({"SYSTEM", :green, "#{user()} disconnected\n"}) # TODO: send this after the node is stopped.
     Node.stop()
+    :ok
   end
 
-  defp process_input(%{input: "connect " <> node_name}) do
+  defp handle_enter(%{input: "connect " <> node_name}) do
     case Node.connect(String.to_atom(node_name)) do
-      true ->
-        msg = {"SYSTEM", :green, "'#{user()}' connected to the cluster\n"}
-        message_all(msg)
-      false ->
-        msg = {"SYSTEM", :red, "'#{user()}' failed to connect to the cluster\n"}
-        message_me(msg)
-      :ignored ->
-        msg = {"SYSTEM", :red, "Must login first. Type 'help' for more info.\n"}
-        message_me(msg)
+      true -> message_all({"SYSTEM", :green, "'#{user()}' connected to the cluster\n"})
+      false -> message_me({"SYSTEM", :red, "'#{user()}' failed to connect to the cluster\n"})
+      :ignored -> message_me({"SYSTEM", :red, "Must login first. Type 'help' for more info.\n"})
     end
+    :ok
   end
 
-  defp process_input(%{input: "users"}) do
+  defp handle_enter(%{input: "users"}) do
     text =
       [node() | Node.list()]
       |> Enum.reduce("Connected Users:\r\n", fn node, acc ->
@@ -143,19 +131,21 @@ defmodule Chat.Server do
         acc <> line
       end)
 
-    msg = {"SYSTEM", :green, text}
-    message_me(msg)
+    message_me({"SYSTEM", :green, text})
+    :ok
   end
 
-  defp process_input(state) do
-    case Node.alive?() do
-      true ->
-        msg = {user(), state.color, state.input}
-        message_all(msg)
-      false ->
-        msg = {"SYSTEM", :red, "Must login first. Type 'help' for more info.\n"}
-        message_me(msg)
+  defp handle_enter(state) do
+    if Node.alive?() do
+      message_all({user(), state.color, state.input})
+    else
+      message_me({"SYSTEM", :red, "Must login first. Type 'help' for more info.\n"})
     end
+    :ok
+  end
+
+  defp user do
+    Node.self() |> Atom.to_string()
   end
 
   defp get_node_name(login_as) do
