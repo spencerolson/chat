@@ -6,6 +6,8 @@ To start the application, run
 $ mix run -e Chat.start
 ```
 
+Once started, type `help` to see all options.
+
 [![asciicast](https://asciinema.org/a/QzghEIZNT526uU5gZNpB1wFdU.svg)](https://asciinema.org/a/QzghEIZNT526uU5gZNpB1wFdU)
 
 ## What is this?
