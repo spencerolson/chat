@@ -19,9 +19,4 @@ defmodule Chat do
     |> IO.getn(@max_utf8_character_bytes)
     |> process_input()
   end
-
-  # defp teardown do
-  #   :io.put_chars("\e[?1049l") # Disable alternate screen buffer
-  #   System.halt(0)
-  # end
 end
