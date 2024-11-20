@@ -93,7 +93,7 @@ defmodule Chat.Server do
   @impl true
   def handle_info({:nodedown, node_name}, state) do
     if Node.alive?() do
-      msg = {"SYSTEM", :green, "<< #{node_name} disconnected >>"}
+      msg = {"SYSTEM", :green, "<< #{node_name} logged out >>"}
       state = %{state | messages: [msg | state.messages]}
       Chat.Screen.render(state)
       {:noreply, state}
@@ -121,7 +121,7 @@ defmodule Chat.Server do
     logout - logout from the chat.\r
     """
 
-    msg = {"SYSTEM", :green, help_message}
+    msg = {"SYSTEM", :white, help_message}
     %{state | input: "", messages: [msg | state.messages]}
   end
 
@@ -162,7 +162,7 @@ defmodule Chat.Server do
     node_name = Node.self()
     case Node.stop() do
       :ok ->
-        msg = {"SYSTEM", :green, "<< #{node_name} disconnected >>"}
+        msg = {"SYSTEM", :green, "<< #{node_name} logged out >>"}
         %{state | input: "", state: "logged_out", messages: [msg | state.messages]}
 
       {:error, :not_found} ->
@@ -195,12 +195,12 @@ defmodule Chat.Server do
   defp handle_enter(%{input: "users"} = state) do
     text =
       [node() | Node.list()]
-      |> Enum.reduce("Connected Users:\r\n", fn node, acc ->
+      |> Enum.reduce("\r\nConnected Users:\r\n", fn node, acc ->
         line = "- #{node}#{if Node.self() == node, do: " (you)", else: ""}\r\n"
         acc <> line
       end)
 
-    msg = {"SYSTEM", :green, text}
+    msg = {"SYSTEM", :white, text}
     %{state | input: "", messages: [msg | state.messages]}
   end
 

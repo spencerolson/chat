@@ -37,7 +37,13 @@ defmodule Chat.Screen do
     ])
   end
 
-  defp user_info(%{state: "connected"}), do: " | #{length(Node.list()) + 1} users online"
+  defp user_info(%{state: "connected"}) do
+    case length(Node.list()) do
+      0 -> " | 1 user online"
+      count -> " | #{count + 1} users online"
+    end
+  end
+
   defp user_info(_), do: ""
 
   defp print_messages(state) do
