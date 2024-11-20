@@ -1,15 +1,14 @@
 defmodule Chat.Screen do
   def render(state) do
     hide_cursor()
-
     state = add_dimensions(state)
     clear_and_move_to_top(state)
     print_top_bar(state)
     print_messages(state)
     move_to_bottom(state)
     print_input(state)
-
     show_cursor()
+    :ok
   end
 
   # -- Movement --
@@ -22,10 +21,16 @@ defmodule Chat.Screen do
     write([move(:bottom, :left, state)])
   end
 
+  defp move(:top, x, state), do: move(0, x, state)
+  defp move(:bottom, x, state), do: move(state.height, x, state)
+  defp move(y, :left, state), do: move(y, 0, state)
+  defp move(y, x, _) when is_integer(y) and is_integer(x), do: IO.ANSI.cursor(y, x)
+
   # -- Printing --
 
   defp print_top_bar(state) do
     user = Node.self() |> Atom.to_string()
+
     write([
       color(state.color),
       user,
@@ -63,6 +68,7 @@ defmodule Chat.Screen do
   defp print_input(state) do
     write([color(state.color), "> " <> state.input, IO.ANSI.reset()])
   end
+
   # -- Utils --
 
   defp add_dimensions(state) do
@@ -76,12 +82,6 @@ defmodule Chat.Screen do
 
   defp hide_cursor, do: :io.put_chars("\e[?25l")
   defp show_cursor, do: :io.put_chars("\e[?25h")
-
-  defp move(:top, x, state), do: move(0, x, state)
-  defp move(:bottom, x, state), do: move(state.height, x, state)
-  defp move(y, :left, state), do: move(y, 0, state)
-  defp move(y, :right, state), do: move(y, state.width, state)
-  defp move(y, x, _) when is_integer(y) and is_integer(x), do: IO.ANSI.cursor(y, x)
 
   defp write(ansidata) do
     ansidata

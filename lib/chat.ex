@@ -8,7 +8,8 @@ defmodule Chat do
 
   defp setup_shell do
     :shell.start_interactive({:noshell, :raw})
-    :io.put_chars("\e[?1049h") # Enable alternate screen buffer
+    # Enable alternate screen buffer
+    :io.put_chars("\e[?1049h")
   end
 
   defp process_input(input) do
