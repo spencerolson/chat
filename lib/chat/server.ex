@@ -31,18 +31,6 @@ defmodule Chat.Server do
     GenServer.abcast(__MODULE__, {:add_message, msg})
   end
 
-  def message_me(msg) do
-    GenServer.cast(__MODULE__, {:add_message, msg})
-  end
-
-  # def notify_connected(node_name) do
-  #   GenServer.cast({__MODULE__, node_name}, :connected)
-  # end
-
-  def set_color(code) do
-    GenServer.cast(__MODULE__, {:set_color, code})
-  end
-
   @impl true
   def init(_) do
     state = %{state: "logged_out", messages: [], input: "", color: :yellow}
@@ -69,12 +57,6 @@ defmodule Chat.Server do
   end
 
   @impl true
-  def handle_cast({:set_color, color}, state) do
-    message_me({"SYSTEM", color, "<< Color changed to #{color}. >>"})
-    {:noreply, %{state | color: color}}
-  end
-
-  @impl true
   def handle_cast({:handle_input, @backspace}, state) do
     state = %{state | input: String.slice(state.input, 0..-2//1)}
     Chat.Screen.render(state)
@@ -84,6 +66,7 @@ defmodule Chat.Server do
   @impl true
   def handle_cast({:handle_input, @enter}, state) do
     state = handle_enter(state)
+    Chat.Screen.render(state)
     {:noreply, state}
   end
 
@@ -101,8 +84,8 @@ defmodule Chat.Server do
 
   @impl true
   def handle_info({:nodeup, node_name}, state) do
-    message_me({"SYSTEM", :green, "<< #{node_name} connected to the cluster >>"})
-    state = %{state | state: "connected"}
+    msg = {"SYSTEM", :green, "<< #{node_name} connected to the cluster >>"}
+    state = %{state | state: "connected", messages: [msg | state.messages]}
     Chat.Screen.render(state)
     {:noreply, state}
   end
@@ -110,10 +93,13 @@ defmodule Chat.Server do
   @impl true
   def handle_info({:nodedown, node_name}, state) do
     if Node.alive?() do
-      message_me({"SYSTEM", :green, "<< #{node_name} disconnected >>"})
+      msg = {"SYSTEM", :green, "<< #{node_name} disconnected >>"}
+      state = %{state | messages: [msg | state.messages]}
+      Chat.Screen.render(state)
+      {:noreply, state}
+    else
+      {:noreply, state}
     end
-
-    {:noreply, state}
   end
 
   defp handle_enter(%{input: "help"} = state) do
@@ -135,23 +121,26 @@ defmodule Chat.Server do
     logout - logout from the chat.\r
     """
 
-    message_me({"SYSTEM", :green, help_message})
-    %{state | input: ""}
+    msg = {"SYSTEM", :green, help_message}
+    %{state | input: "", messages: [msg | state.messages]}
   end
 
   defp handle_enter(%{input: "color rand"} = state) do
-    0..255 |> Enum.random() |> set_color()
-    %{state | input: ""}
+    color = Enum.random(0..255)
+    msg = {"SYSTEM", color, "<< Color changed to #{color}. >>"}
+    %{state | input: "", color: color, messages: [msg | state.messages]}
   end
 
   defp handle_enter(%{input: "color " <> code_str} = state) do
     case Integer.parse(code_str) do
       {code, ""} when code in 0..255 ->
-        set_color(code)
-        _ -> message_me({"SYSTEM", :red, "<< Invalid color code. Please enter a number between 0 and 255, inclusive. >>"})
-    end
+        msg = {"SYSTEM", code, "<< Color changed to #{code}. >>"}
+        %{state | input: "", color: code, messages: [msg | state.messages]}
 
-    %{state | input: ""}
+      _ ->
+        msg = {"SYSTEM", :red, "<< Invalid color code. Please enter a number between 0 and 255, inclusive. >>"}
+        %{state | input: "", messages: [msg | state.messages]}
+    end
   end
 
   defp handle_enter(%{input: "login" <> login_as} = state) do
@@ -160,12 +149,12 @@ defmodule Chat.Server do
       {:ok, _} ->
         Node.set_cookie(:monster)
         :net_kernel.monitor_nodes(true)
-        message_me({"SYSTEM", :green, "<< #{node_name} logged in >>"})
-        %{state | input: "", state: "disconnected"}
+        msg = {"SYSTEM", :green, "<< #{node_name} logged in >>"}
+        %{state | input: "", state: "disconnected", messages: [msg | state.messages]}
 
       {:error, _} ->
-        message_me({"SYSTEM", :red, "<< Failed to start node with name #{node_name} >>"})
-        %{state | input: ""}
+        msg = {"SYSTEM", :red, "<< Failed to start node with name #{node_name} >>"}
+        %{state | input: "", messages: [msg | state.messages]}
     end
   end
 
@@ -173,22 +162,16 @@ defmodule Chat.Server do
     node_name = Node.self()
     case Node.stop() do
       :ok ->
-        message_me({"SYSTEM", :green, "<< #{node_name} disconnected >>"})
-        state = %{state | input: "", state: "logged_out"}
-        Chat.Screen.render(state)
-        state
+        msg = {"SYSTEM", :green, "<< #{node_name} disconnected >>"}
+        %{state | input: "", state: "logged_out", messages: [msg | state.messages]}
 
       {:error, :not_found} ->
-        message_me({"SYSTEM", :red, "<< Must login first. Type 'help' for more info >>"})
-        state = %{state | input: ""}
-        Chat.Screen.render(state)
-        state
+        msg = {"SYSTEM", :red, "<< Must login first. Type 'help' for more info >>"}
+        %{state | input: "", messages: [msg | state.messages]}
 
       {:error, _} ->
-        message_me({"SYSTEM", :red, "<< Failed logout attempt >>"})
-        state = %{state | input: ""}
-        Chat.Screen.render(state)
-        state
+        msg = {"SYSTEM", :red, "<< Failed logout attempt >>"}
+        %{state | input: "", messages: [msg | state.messages]}
     end
   end
 
@@ -199,12 +182,12 @@ defmodule Chat.Server do
         %{state | input: "", state: "connected"}
 
       false ->
-        message_me({"SYSTEM", :red, "<< #{user()} failed to connect to the cluster >>"})
-        %{state | input: ""}
+        msg = {"SYSTEM", :red, "<< #{user()} failed to connect to the cluster >>"}
+        %{state | input: "", messages: [msg | state.messages]}
 
       :ignored ->
-        message_me({"SYSTEM", :red, "<< Must login first. Type 'help' for more info >>"})
-        %{state | input: ""}
+        msg = {"SYSTEM", :red, "<< Must login first. Type 'help' for more info >>"}
+        %{state | input: "", messages: [msg | state.messages]}
     end
 
   end
@@ -217,8 +200,8 @@ defmodule Chat.Server do
         acc <> line
       end)
 
-    message_me({"SYSTEM", :green, text})
-    %{state | input: ""}
+    msg = {"SYSTEM", :green, text}
+    %{state | input: "", messages: [msg | state.messages]}
   end
 
   defp handle_enter(state) do
@@ -227,8 +210,8 @@ defmodule Chat.Server do
         state
 
       not Node.alive?() ->
-        message_me({"SYSTEM", :red, "<< Must login first. Type 'help' for more info. >>"})
-        %{state | input: ""}
+        msg = {"SYSTEM", :red, "<< Must login first. Type 'help' for more info. >>"}
+        %{state | input: "", messages: [msg | state.messages]}
 
       true ->
         message_all({user(), state.color, state.input})
