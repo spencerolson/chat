@@ -109,9 +109,9 @@ defmodule Chat.Server do
 
     login <name>@<host> - login to the chat with name and host.\r
     login <name> - login to the chat with name. Tries to infer host from `ipconfig getifaddr en0`.\r
-    login - login to the chat with name 'noname'. Tries to infer host from `ipconfig getifaddr en0`.\r
 
     connect <name>@<host> - connect to another user. Connecting to a single user automatically connects to all users in the cluster.\r
+    connect <name> - connect to another user with the same host.\r
 
     users - list connected users.\r
 
@@ -143,19 +143,10 @@ defmodule Chat.Server do
     end
   end
 
-  defp handle_enter(%{input: "login" <> login_as} = state) do
-    node_name = login_as |> String.trim() |> get_node_name() |> String.to_atom()
-    case Node.start(node_name) do
-      {:ok, _} ->
-        Node.set_cookie(:monster)
-        :net_kernel.monitor_nodes(true)
-        msg = {"SYSTEM", :green, "<< #{node_name} logged in >>"}
-        %{state | input: "", state: "disconnected", messages: [msg | state.messages]}
-
-      {:error, _} ->
-        msg = {"SYSTEM", :red, "<< Failed to start node with name #{node_name} >>"}
-        %{state | input: "", messages: [msg | state.messages]}
-    end
+  defp handle_enter(%{input: "login " <> login_as} = state) do
+    login_as
+    |> get_node_name()
+    |> start_node(state)
   end
 
   defp handle_enter(%{input: "logout"} = state) do
@@ -176,20 +167,8 @@ defmodule Chat.Server do
   end
 
   defp handle_enter(%{input: "connect " <> node_name_str} = state) do
-    node_name = String.to_atom(node_name_str)
-    case Node.connect(node_name) do
-      true ->
-        %{state | input: "", state: "connected"}
-
-      false ->
-        msg = {"SYSTEM", :red, "<< #{user()} failed to connect to the cluster >>"}
-        %{state | input: "", messages: [msg | state.messages]}
-
-      :ignored ->
-        msg = {"SYSTEM", :red, "<< Must login first. Type 'help' for more info >>"}
-        %{state | input: "", messages: [msg | state.messages]}
-    end
-
+    node_name = get_node_name(node_name_str)
+    connect_node(node_name, state)
   end
 
   defp handle_enter(%{input: "users"} = state) do
@@ -219,23 +198,68 @@ defmodule Chat.Server do
     end
   end
 
+  defp start_node({:error, :invalid_name}, state), do: invalid_node_name(state)
+
+  defp start_node(node_name_str, state) do
+    node_name = String.to_atom(node_name_str)
+    case Node.start(node_name) do
+      {:ok, _} ->
+        Node.set_cookie(:monster)
+        :net_kernel.monitor_nodes(true)
+        msg = {"SYSTEM", :green, "<< #{node_name} logged in >>"}
+        %{state | input: "", state: "disconnected", messages: [msg | state.messages]}
+
+      {:error, _} ->
+        msg = {"SYSTEM", :red, "<< Failed to start node with name #{node_name} >>"}
+        %{state | input: "", messages: [msg | state.messages]}
+    end
+  end
+
+  defp connect_node({:error, :invalid_name}, state), do: invalid_node_name(state)
+
+  defp connect_node(node_name_str, state) do
+    node_name = String.to_atom(node_name_str)
+    case Node.connect(node_name) do
+      true ->
+        %{state | input: "", state: "connected"}
+
+      false ->
+        msg = {"SYSTEM", :red, "<< #{user()} failed to connect to the cluster >>"}
+        %{state | input: "", messages: [msg | state.messages]}
+
+      :ignored ->
+        msg = {"SYSTEM", :red, "<< Must login first. Type 'help' for more info >>"}
+        %{state | input: "", messages: [msg | state.messages]}
+    end
+  end
+
+  defp invalid_node_name(state) do
+    msg = {"SYSTEM", :red, "<< Invalid node name. Please enter a valid name. >>"}
+    %{state | input: "", messages: [msg | state.messages]}
+  end
+
   defp user do
     Node.self() |> Atom.to_string()
   end
 
-  defp get_node_name(login_as) do
-    case String.split(login_as, "@") do
-      [_, _] -> login_as
-      [""] -> "noname@#{get_host()}"
-      [name] -> "#{name}@#{get_host()}"
-      _ -> "noname@#{get_host()}"
+  defp get_node_name(str) do
+    case String.split(str, "@") do
+      [_, _] -> str
+      [name] when name != "" -> "#{name}@#{get_host()}"
+      _ -> {:error, :invalid_name}
     end
   end
 
   defp get_host do
-    case System.cmd("ipconfig", ["getifaddr", "en0"]) do
-      {host, 0} -> String.trim(host)
-      _ -> "localhost"
+    {:ok, interfaces} = :inet.getifaddrs()
+    Enum.find_value(interfaces, fn {_, descriptions} ->
+      Enum.find_value(descriptions, &ipv4_addr/1)
+    end)
+  end
+
+  defp ipv4_addr({key, value}) do
+    if key == :addr and tuple_size(value) == 4 and value != {127, 0, 0, 1} do
+      value |> Tuple.to_list() |> Enum.join(".")
     end
   end
 end
