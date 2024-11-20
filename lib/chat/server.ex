@@ -35,9 +35,9 @@ defmodule Chat.Server do
     GenServer.cast(__MODULE__, {:add_message, msg})
   end
 
-  def notify_connected(node_name) do
-    GenServer.cast({__MODULE__, node_name}, :connected)
-  end
+  # def notify_connected(node_name) do
+  #   GenServer.cast({__MODULE__, node_name}, :connected)
+  # end
 
   def set_color(code) do
     GenServer.cast(__MODULE__, {:set_color, code})
@@ -65,7 +65,6 @@ defmodule Chat.Server do
   def handle_cast(:connected, state) do
     state = %{state | state: "connected"}
     Chat.Screen.render(state)
-    message_all({"SYSTEM", :green, "<< #{user()} connected to the cluster. >>"})
     {:noreply, state}
   end
 
@@ -97,6 +96,23 @@ defmodule Chat.Server do
   def handle_cast({:handle_input, input}, state) do
     state = %{state | input: state.input <> input}
     Chat.Screen.render(state)
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:nodeup, node_name}, state) do
+    message_me({"SYSTEM", :green, "<< #{node_name} connected to the cluster >>"})
+    state = %{state | state: "connected"}
+    Chat.Screen.render(state)
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:nodedown, node_name}, state) do
+    if Node.alive?() do
+      message_me({"SYSTEM", :green, "<< #{node_name} disconnected >>"})
+    end
+
     {:noreply, state}
   end
 
@@ -143,27 +159,43 @@ defmodule Chat.Server do
     case Node.start(node_name) do
       {:ok, _} ->
         Node.set_cookie(:monster)
-        message_me({"SYSTEM", :green, "<< '#{node_name}' logged in >>"})
+        :net_kernel.monitor_nodes(true)
+        message_me({"SYSTEM", :green, "<< #{node_name} logged in >>"})
         %{state | input: "", state: "disconnected"}
+
       {:error, _} ->
-        message_me({"SYSTEM", :red, "<< Failed to start node with name '#{node_name}' >>"})
+        message_me({"SYSTEM", :red, "<< Failed to start node with name #{node_name} >>"})
         %{state | input: ""}
     end
   end
 
   defp handle_enter(%{input: "logout"} = state) do
-    message_all({"SYSTEM", :green, "<< #{user()} disconnected >>"}) # TODO: send this after the node is stopped.
-    Node.stop()
+    node_name = Node.self()
+    case Node.stop() do
+      :ok ->
+        message_me({"SYSTEM", :green, "<< #{node_name} disconnected >>"})
+        state = %{state | input: "", state: "logged_out"}
+        Chat.Screen.render(state)
+        state
 
-    %{state | input: "", state: "logged_out"}
+      {:error, :not_found} ->
+        message_me({"SYSTEM", :red, "<< Must login first. Type 'help' for more info >>"})
+        state = %{state | input: ""}
+        Chat.Screen.render(state)
+        state
+
+      {:error, _} ->
+        message_me({"SYSTEM", :red, "<< Failed logout attempt >>"})
+        state = %{state | input: ""}
+        Chat.Screen.render(state)
+        state
+    end
   end
 
   defp handle_enter(%{input: "connect " <> node_name_str} = state) do
     node_name = String.to_atom(node_name_str)
     case Node.connect(node_name) do
       true ->
-        message_all({"SYSTEM", :green, "<< #{user()} connected to the cluster >>"})
-        notify_connected(node_name)
         %{state | input: "", state: "connected"}
 
       false ->
