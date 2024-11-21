@@ -1,22 +1,8 @@
 defmodule Chat do
-  @max_utf8_character_bytes 4
+  alias Chat.{Input, Screen, Server}
 
   def start do
-    setup_shell()
-    process_input("")
-  end
-
-  defp setup_shell do
-    :shell.start_interactive({:noshell, :raw})
-    # Enable alternate screen buffer
-    :io.put_chars("\e[?1049h")
-  end
-
-  defp process_input(input) do
-    Chat.Server.handle_input(input)
-
-    ""
-    |> IO.getn(@max_utf8_character_bytes)
-    |> process_input()
+    Screen.setup_shell()
+    Input.process_input(&Server.handle_input/1)
   end
 end

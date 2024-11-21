@@ -162,6 +162,9 @@ defmodule Chat.Server do
     end
   end
 
+
+  defp handle_enter(%{input: "quit"} = state), do: handle_enter(%{state | input: "logout"})
+  defp handle_enter(%{input: "exit"} = state), do: handle_enter(%{state | input: "logout"})
   defp handle_enter(%{input: "logout"} = state) do
     node_name = Node.self()
 

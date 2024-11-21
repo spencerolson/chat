@@ -11,6 +11,13 @@ defmodule Chat.Screen do
     :ok
   end
 
+  def setup_shell do
+    :shell.start_interactive({:noshell, :raw})
+    # Enable alternate screen buffer
+    :io.put_chars("\e[?1049h")
+    :ok
+  end
+
   # -- Movement --
 
   defp clear_and_move_to_top(state) do
