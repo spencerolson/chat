@@ -2,10 +2,11 @@ defmodule Chat.Screen do
   def render(state) do
     hide_cursor()
     state = add_dimensions(state)
-    clear_and_move_to_top(state)
-    print_top_bar(state)
+    write([IO.ANSI.clear(), move(:top, :left, state), "\n"])
     print_messages(state)
-    move_to_bottom(state)
+    write([move(:top, :left, state)])
+    print_top_bar(state)
+    write([move(:bottom, :left, state)])
     print_input(state)
     show_cursor()
     :ok
@@ -19,14 +20,6 @@ defmodule Chat.Screen do
   end
 
   # -- Movement --
-
-  defp clear_and_move_to_top(state) do
-    write([IO.ANSI.clear(), move(:top, :left, state)])
-  end
-
-  defp move_to_bottom(state) do
-    write([move(:bottom, :left, state)])
-  end
 
   defp move(:top, x, state), do: move(0, x, state)
   defp move(:bottom, x, state), do: move(state.height, x, state)
@@ -58,6 +51,7 @@ defmodule Chat.Screen do
 
   defp user_info(_), do: ""
 
+  # TODO: limit the number of messages printed to only those that fit on the screen.
   defp print_messages(state) do
     state.messages
     |> Enum.reverse()
