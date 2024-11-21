@@ -72,7 +72,7 @@ defmodule Chat.Messaging do
     help - show this message.\r
 
     login <name>@<host> - login to the chat with name and host.\r
-    login <name> - login to the chat with name. Tries to infer host from `ipconfig getifaddr en0`.\r
+    login <name> - login to the chat with name. Tries to infer host using :inet.getifaddrs/0.\r
 
     connect <name>@<host> - connect to another user. Connecting to a single user automatically connects to all users in the cluster.\r
     connect <name> - connect to another user with the same host.\r
