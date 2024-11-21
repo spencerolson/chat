@@ -52,7 +52,12 @@ defmodule Chat.Clustering do
   end
 
   defp interface_ipv4_addr({_, descriptions}) do
-    Enum.find_value(descriptions, &ipv4_addr/1)
+    flags = Keyword.get(descriptions, :flags, [])
+    if Enum.member?(flags, :loopback) do
+      nil
+    else
+      Enum.find_value(descriptions, &ipv4_addr/1)
+    end
   end
 
   defp ipv4_addr({key, value}) do
