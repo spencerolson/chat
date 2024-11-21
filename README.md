@@ -10,7 +10,7 @@ Once started, type `help` to see all options.
 
 Try running the application in multiple terminal windows, or even on multiple machines within the same network!
 
-[![asciicast](https://asciinema.org/a/QzghEIZNT526uU5gZNpB1wFdU.svg)](https://asciinema.org/a/QzghEIZNT526uU5gZNpB1wFdU)
+![Demo](https://github.com/spencerolson/chat/raw/main/priv/static/images/demo.gif)
 
 ## What is this?
 
