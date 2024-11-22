@@ -24,8 +24,8 @@ defmodule Chat.Clustering do
         :net_kernel.monitor_nodes(true)
         {:ok, node_name_str}
 
-      {:error, _} ->
-        {:error, {:could_not_start, node_name_str}}
+      {:error, error} ->
+        {:error, {:could_not_start, node_name_str, error}}
     end
   end
 

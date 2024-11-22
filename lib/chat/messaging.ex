@@ -52,8 +52,8 @@ defmodule Chat.Messaging do
     system_message("Failed to connect to node with name #{node_name}")
   end
 
-  def could_not_start_node(node_name) do
-    system_message("Failed to start node with name #{node_name}")
+  def could_not_start_node(node_name, error) do
+    system_message("Failed to start node with name #{node_name}") <> "\r\n" <> inspect(error)
   end
 
   def invalid_node_name("") do

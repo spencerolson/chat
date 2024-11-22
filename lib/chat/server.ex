@@ -156,8 +156,8 @@ defmodule Chat.Server do
         msg = {"SYSTEM", :red, Messaging.invalid_node_name(node_name)}
         %{state | input: "", messages: [msg | state.messages]}
 
-      {:error, {:could_not_start, node_name}} ->
-        msg = {"SYSTEM", :red, Messaging.could_not_start_node(node_name)}
+      {:error, {:could_not_start, node_name, error}} ->
+        msg = {"SYSTEM", :red, Messaging.could_not_start_node(node_name, error)}
         %{state | input: "", messages: [msg | state.messages]}
     end
   end
