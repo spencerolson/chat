@@ -1,4 +1,8 @@
 defmodule Chat.Clustering do
+  def setup do
+    ensure_epmd_running()
+  end
+
   def nodes() do
     [node() | Node.list()]
   end
@@ -43,6 +47,16 @@ defmodule Chat.Clustering do
 
       :ignored ->
         {:error, {:must_login_first, node_name_str}}
+    end
+  end
+
+  defp ensure_epmd_running do
+    epmd_path = System.find_executable("epmd")
+    if epmd_path do
+      Port.open({:spawn_executable, epmd_path}, [])
+      :ok
+    else
+      {:error, :epmd_not_found}
     end
   end
 

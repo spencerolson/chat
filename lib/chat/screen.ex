@@ -1,4 +1,11 @@
 defmodule Chat.Screen do
+  def setup do
+    :shell.start_interactive({:noshell, :raw})
+    # Enable alternate screen buffer
+    :io.put_chars("\e[?1049h")
+    :ok
+  end
+
   def render(state) do
     hide_cursor()
     state = add_dimensions(state)
@@ -9,13 +16,6 @@ defmodule Chat.Screen do
     write([move(:bottom, :left, state)])
     print_input(state)
     show_cursor()
-    :ok
-  end
-
-  def setup_shell do
-    :shell.start_interactive({:noshell, :raw})
-    # Enable alternate screen buffer
-    :io.put_chars("\e[?1049h")
     :ok
   end
 

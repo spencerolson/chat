@@ -27,5 +27,4 @@ $ asdf global erlang ref:master
 
 ## TODO
 - Only render the messages that are visible on screen (currently it renders all, and performance can get bad/janky with a lot of messages)
-- Ensure epmd is started on app startup (it'll be started if the user has created a node before, but otherwise the app will fail)
 - Decide if i should be using multi_call instead of abcast for message broadcast
