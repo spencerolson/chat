@@ -47,17 +47,21 @@ defmodule Chat.Server do
     GenServer.abcast(__MODULE__, {:add_message, msg})
   end
 
+  def initial_state do
+    %{state: "logged_out", messages: [], input: "", color: :yellow}
+  end
+
   @impl true
   def init(_) do
-    state = %{state: "logged_out", messages: [], input: "", color: :yellow}
-    {:ok, state}
+    {:ok, initial_state()}
   end
 
   @impl true
   def handle_cast({:add_message, msg}, state) do
-    state = %{state | messages: [msg | state.messages]}
-    Screen.render(state)
-    {:noreply, state}
+    state
+    |> Map.merge(%{messages: [msg | state.messages]})
+    |> Screen.render(state)
+    |> then(&{:noreply, &1})
   end
 
   @impl true
@@ -67,23 +71,26 @@ defmodule Chat.Server do
 
   @impl true
   def handle_cast(:connected, state) do
-    state = %{state | state: "connected"}
-    Screen.render(state)
-    {:noreply, state}
-  end
-
-  @impl true
-  def handle_cast({:handle_input, @backspace}, state) do
-    state = %{state | input: String.slice(state.input, 0..-2//1)}
-    Screen.render(state)
-    {:noreply, state}
+    state
+    |> Map.merge(%{state: "connected"})
+    |> Screen.render(state)
+    |> then(&{:noreply, &1})
   end
 
   @impl true
   def handle_cast({:handle_input, @enter}, state) do
-    state = handle_enter(state)
-    Screen.render(state)
-    {:noreply, state}
+    state
+    |> handle_enter()
+    |> Screen.render(state)
+    |> then(&{:noreply, &1})
+  end
+
+  @impl true
+  def handle_cast({:handle_input, @backspace}, state) do
+    state
+    |> Map.merge(%{input: String.slice(state.input, 0..-2//1)})
+    |> Screen.render(state)
+    |> then(&{:noreply, &1})
   end
 
   @impl true
@@ -93,51 +100,56 @@ defmodule Chat.Server do
 
   @impl true
   def handle_cast({:handle_input, input}, state) do
-    state = %{state | input: state.input <> input}
-    Screen.render(state)
-    {:noreply, state}
+    state
+    |> Map.merge(%{input: state.input <> input})
+    |> Screen.render(state)
+    |> then(&{:noreply, &1})
   end
 
   @impl true
   def handle_info({:nodeup, node_name}, state) do
-    msg = {"SYSTEM", :green, Messaging.connected(node_name)}
-    state = %{state | state: "connected", messages: [msg | state.messages]}
-    Screen.render(state)
-    {:noreply, state}
+    messages = [{"SYSTEM", :green, Messaging.connected(node_name)} | state.messages]
+
+    state
+    |> Map.merge(%{messages: messages, state: "connected"})
+    |> Screen.render(state)
+    |> then(&{:noreply, &1})
   end
 
   @impl true
   def handle_info({:nodedown, node_name}, state) do
     if Node.alive?() do
-      msg = {"SYSTEM", :green, Messaging.disconnected(node_name)}
-      state = %{state | messages: [msg | state.messages]}
-      Screen.render(state)
-      {:noreply, state}
+      messages = [{"SYSTEM", :green, Messaging.disconnected(node_name)} | state.messages]
+
+      state
+      |> Map.merge(%{messages: messages})
+      |> Screen.render(state)
+      |> then(&{:noreply, &1})
     else
       {:noreply, state}
     end
   end
 
   defp handle_enter(%{input: "help"} = state) do
-    msg = {"SYSTEM", :white, Messaging.help_message()}
-    %{state | input: "", messages: [msg | state.messages]}
+    messages = [{"SYSTEM", :white, Messaging.help_message()} | state.messages]
+    %{state | input: "", messages: messages}
   end
 
   defp handle_enter(%{input: "color rand"} = state) do
     code = Enum.random(0..255)
-    msg = {"SYSTEM", code, Messaging.color_changed(code)}
-    %{state | input: "", color: code, messages: [msg | state.messages]}
+    messages = [{"SYSTEM", code, Messaging.color_changed(code)} | state.messages]
+    %{state | input: "", color: code, messages: messages}
   end
 
   defp handle_enter(%{input: "color " <> code_str} = state) do
     case Integer.parse(code_str) do
       {code, ""} when code in 0..255 ->
-        msg = {"SYSTEM", code, Messaging.color_changed(code)}
-        %{state | input: "", color: code, messages: [msg | state.messages]}
+        messages = [{"SYSTEM", code, Messaging.color_changed(code)} | state.messages]
+        %{state | input: "", color: code, messages: messages}
 
       _ ->
-        msg = {"SYSTEM", :red, Messaging.invalid_color()}
-        %{state | input: "", messages: [msg | state.messages]}
+        messages = [{"SYSTEM", :red, Messaging.invalid_color()} | state.messages]
+        %{state | input: "", messages: messages}
     end
   end
 
@@ -149,37 +161,40 @@ defmodule Chat.Server do
 
     case status do
       {:ok, node_name} ->
-        msg = {"SYSTEM", :green, Messaging.logged_in(node_name)}
-        %{state | input: "", state: "disconnected", messages: [msg | state.messages]}
+        messages = [{"SYSTEM", :green, Messaging.logged_in(node_name)} | state.messages]
+        %{state | input: "", state: "disconnected", messages: messages}
 
       {:error, {:invalid_name, node_name}} ->
-        msg = {"SYSTEM", :red, Messaging.invalid_node_name(node_name)}
-        %{state | input: "", messages: [msg | state.messages]}
+        messages = [{"SYSTEM", :red, Messaging.invalid_node_name(node_name)} | state.messages]
+        %{state | input: "", messages: messages}
 
       {:error, {:could_not_start, node_name, error}} ->
-        msg = {"SYSTEM", :red, Messaging.could_not_start_node(node_name, error)}
-        %{state | input: "", messages: [msg | state.messages]}
+        messages = [
+          {"SYSTEM", :red, Messaging.could_not_start_node(node_name, error)} | state.messages
+        ]
+
+        %{state | input: "", messages: messages}
     end
   end
 
-
   defp handle_enter(%{input: "quit"} = state), do: handle_enter(%{state | input: "logout"})
   defp handle_enter(%{input: "exit"} = state), do: handle_enter(%{state | input: "logout"})
+
   defp handle_enter(%{input: "logout"} = state) do
     node_name = Node.self()
 
     case Node.stop() do
       :ok ->
-        msg = {"SYSTEM", :green, Messaging.logged_out(node_name)}
-        %{state | input: "", state: "logged_out", messages: [msg | state.messages]}
+        messages = [{"SYSTEM", :green, Messaging.logged_out(node_name)} | state.messages]
+        %{state | input: "", state: "logged_out", messages: messages}
 
       {:error, :not_found} ->
-        msg = {"SYSTEM", :red, Messaging.requires_login()}
-        %{state | input: "", messages: [msg | state.messages]}
+        messages = [{"SYSTEM", :red, Messaging.requires_login()} | state.messages]
+        %{state | input: "", messages: messages}
 
       {:error, _} ->
-        msg = {"SYSTEM", :red, Messaging.failed_logout()}
-        %{state | input: "", messages: [msg | state.messages]}
+        messages = [{"SYSTEM", :red, Messaging.failed_logout()} | state.messages]
+        %{state | input: "", messages: messages}
     end
   end
 
@@ -194,16 +209,19 @@ defmodule Chat.Server do
         %{state | input: "", state: "connected"}
 
       {:error, {:invalid_name, node_name}} ->
-        msg = {"SYSTEM", :red, Messaging.invalid_node_name(node_name)}
-        %{state | input: "", messages: [msg | state.messages]}
+        messages = [{"SYSTEM", :red, Messaging.invalid_node_name(node_name)} | state.messages]
+        %{state | input: "", messages: messages}
 
       {:error, {:could_not_connect, node_name}} ->
-        msg = {"SYSTEM", :red, Messaging.could_not_connect_node(node_name)}
-        %{state | input: "", messages: [msg | state.messages]}
+        messages = [
+          {"SYSTEM", :red, Messaging.could_not_connect_node(node_name)} | state.messages
+        ]
+
+        %{state | input: "", messages: messages}
 
       {:error, {:must_login_first, _}} ->
-        msg = {"SYSTEM", :red, Messaging.requires_login()}
-        %{state | input: "", messages: [msg | state.messages]}
+        messages = [{"SYSTEM", :red, Messaging.requires_login()} | state.messages]
+        %{state | input: "", messages: messages}
     end
   end
 
@@ -214,8 +232,8 @@ defmodule Chat.Server do
         acc <> Messaging.userslist_line(node)
       end)
 
-    msg = {"SYSTEM", :white, text}
-    %{state | input: "", messages: [msg | state.messages]}
+    messages = [{"SYSTEM", :white, text} | state.messages]
+    %{state | input: "", messages: messages}
   end
 
   defp handle_enter(state) do
@@ -224,8 +242,8 @@ defmodule Chat.Server do
         state
 
       not Node.alive?() ->
-        msg = {"SYSTEM", :red, Messaging.requires_login()}
-        %{state | input: "", messages: [msg | state.messages]}
+        messages = [{"SYSTEM", :red, Messaging.requires_login()} | state.messages]
+        %{state | input: "", messages: messages}
 
       true ->
         user = Node.self() |> Atom.to_string()
