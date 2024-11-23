@@ -18,7 +18,7 @@ defmodule Chat.Screen do
     state
     |> add_dimensions()
     |> hide_cursor()
-    |> maybe_print_top_bar(changes)
+    |> print_top_bar()
     |> maybe_print_messages(changes)
     |> maybe_print_input(changes)
     |> show_cursor()
@@ -34,10 +34,6 @@ defmodule Chat.Screen do
   defp move(y, x, _) when is_integer(y) and is_integer(x), do: IO.ANSI.cursor(y, x)
 
   # -- Printing --
-
-  defp maybe_print_top_bar(state, %{color: _}), do: print_top_bar(state)
-  defp maybe_print_top_bar(state, %{state: _}), do: print_top_bar(state)
-  defp maybe_print_top_bar(state, _), do: state
 
   defp print_top_bar(state) do
     user = Node.self() |> Atom.to_string()
