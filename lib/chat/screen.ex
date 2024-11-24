@@ -21,7 +21,7 @@ defmodule Chat.Screen do
     |> maybe_print_messages(changes)
     |> print_top_bar()
     |> print_input()
-    |> show_cursor()
+    |> maybe_show_cursor()
 
     state
   end
@@ -107,7 +107,7 @@ defmodule Chat.Screen do
       move(:bottom, :left, state),
       IO.ANSI.clear_line(),
       color(state.color),
-      @prompt <> state.input,
+      @prompt <> visible_input(state),
       IO.ANSI.reset()
     ])
 
@@ -127,18 +127,16 @@ defmodule Chat.Screen do
 
   defp max_visible_messages(state), do: state.height - @start_messages_y - 1
 
-  defp lines_above_input_to_clear(state) do
-    input_length = String.length(@prompt <> state.input)
-    div(input_length + 1, state.width)
-  end
-
   defp hide_cursor(state) do
     :io.put_chars("\e[?25l")
     state
   end
 
-  defp show_cursor(state) do
-    :io.put_chars("\e[?25h")
+  defp maybe_show_cursor(state) do
+    if String.length(state.input) < max_input_length(state) do
+      :io.put_chars("\e[?25h")
+    end
+
     state
   end
 
@@ -146,5 +144,18 @@ defmodule Chat.Screen do
     ansidata
     |> IO.ANSI.format()
     |> IO.write()
+  end
+
+  defp max_input_length(state), do: state.width - String.length(@prompt)
+
+  defp visible_input(state) do
+    max = max_input_length(state)
+
+    if String.length(state.input) <= max do
+      state.input
+    else
+      start = String.length(state.input) - max
+      String.slice(state.input, start, max)
+    end
   end
 end
