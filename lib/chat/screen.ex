@@ -46,6 +46,8 @@ defmodule Chat.Screen do
       color(:yellow),
       " | " <> state.state,
       user_info(state),
+      IO.ANSI.cursor_down(1),
+      IO.ANSI.clear_line(),
       move(:bottom, @start_input_x, state),
       IO.ANSI.reset()
     ])
