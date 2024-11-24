@@ -46,7 +46,7 @@ defmodule Chat.Screen do
       color(:yellow),
       " | " <> state.state,
       user_info(state),
-      "\r\n\n",
+      move(:bottom, @start_input_x, state),
       IO.ANSI.reset()
     ])
 
@@ -75,7 +75,6 @@ defmodule Chat.Screen do
     |> Enum.each(&print_message/1)
 
     write([move(:bottom, @start_input_x, state)])
-
     state
   end
 
