@@ -53,7 +53,6 @@ defmodule Chat.Screen do
     state
   end
 
-  # TODO: make this re-render when a new user connects. Will need to track connected users in GenServer state.
   defp user_info(%{state: "connected"}) do
     case length(Node.list()) do
       0 -> " | 1 user online"
