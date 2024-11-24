@@ -1,6 +1,7 @@
 defmodule Chat.Screen do
   alias Chat.Server
 
+  @cursor_length 1
   @prompt "> "
   @start_messages_y 3
   @start_input_x String.length(@prompt) + 1
@@ -21,7 +22,7 @@ defmodule Chat.Screen do
     |> maybe_print_messages(changes)
     |> print_top_bar()
     |> print_input()
-    |> maybe_show_cursor()
+    |> show_cursor()
 
     state
   end
@@ -134,11 +135,8 @@ defmodule Chat.Screen do
     state
   end
 
-  defp maybe_show_cursor(state) do
-    if String.length(state.input) < max_input_length(state) do
-      :io.put_chars("\e[?25h")
-    end
-
+  defp show_cursor(state) do
+    :io.put_chars("\e[?25h")
     state
   end
 
@@ -148,7 +146,7 @@ defmodule Chat.Screen do
     |> IO.write()
   end
 
-  defp max_input_length(state), do: state.width - String.length(@prompt)
+  defp max_input_length(state), do: max(state.width - String.length(@prompt) - @cursor_length, 0)
 
   defp visible_input(state) do
     max = max_input_length(state)
