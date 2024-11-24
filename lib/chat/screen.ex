@@ -18,9 +18,9 @@ defmodule Chat.Screen do
     state
     |> add_dimensions()
     |> hide_cursor()
-    |> print_top_bar()
     |> maybe_print_messages(changes)
-    |> maybe_print_input(changes)
+    |> print_top_bar()
+    |> print_input()
     |> show_cursor()
 
     state
@@ -69,7 +69,10 @@ defmodule Chat.Screen do
   defp print_messages(state) do
     write([move(@start_messages_y, :left, state)])
 
+    message_count = max_visible_messages(state)
+
     state.messages
+    |> Enum.take(message_count)
     |> Enum.reverse()
     |> Enum.each(&print_message/1)
 
@@ -99,10 +102,6 @@ defmodule Chat.Screen do
     ])
   end
 
-  defp maybe_print_input(state, %{input: _}), do: print_input(state)
-  defp maybe_print_input(state, %{color: _}), do: print_input(state)
-  defp maybe_print_input(state, _), do: state
-
   defp print_input(state) do
     write([
       move(:bottom, :left, state),
@@ -125,6 +124,13 @@ defmodule Chat.Screen do
 
   defp color(code) when is_integer(code), do: IO.ANSI.color(code)
   defp color(name) when is_atom(name), do: name
+
+  defp max_visible_messages(state), do: state.height - @start_messages_y - 1
+
+  defp lines_above_input_to_clear(state) do
+    input_length = String.length(@prompt <> state.input)
+    div(input_length + 1, state.width)
+  end
 
   defp hide_cursor(state) do
     :io.put_chars("\e[?25l")
