@@ -3,6 +3,7 @@ defmodule Chat.Server do
 
   alias Chat.{Clustering, Messaging, Screen}
 
+  @character_limit 300
   @backspace "\d"
   @enter "\r"
   @ignored [
@@ -100,10 +101,14 @@ defmodule Chat.Server do
 
   @impl true
   def handle_cast({:handle_input, input}, state) do
-    state
-    |> Map.merge(%{input: state.input <> input})
-    |> Screen.render(state)
-    |> then(&{:noreply, &1})
+    if String.length(state.input) >= @character_limit and input != " " do
+      {:noreply, state}
+    else
+      state
+      |> Map.merge(%{input: state.input <> input})
+      |> Screen.render(state)
+      |> then(&{:noreply, &1})
+    end
   end
 
   @impl true
