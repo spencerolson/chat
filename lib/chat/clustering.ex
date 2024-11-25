@@ -1,4 +1,7 @@
 defmodule Chat.Clustering do
+  @loopback_address {127, 0, 0, 1}
+  @super_secret_cookie :monster
+
   def setup do
     ensure_epmd_running()
   end
@@ -24,7 +27,7 @@ defmodule Chat.Clustering do
 
     case Node.start(node_name) do
       {:ok, _} ->
-        Node.set_cookie(:monster)
+        Node.set_cookie(@super_secret_cookie)
         :net_kernel.monitor_nodes(true)
         {:ok, node_name_str}
 
@@ -75,7 +78,7 @@ defmodule Chat.Clustering do
   end
 
   defp ipv4_addr({key, value}) do
-    if key == :addr and tuple_size(value) == 4 and value != {127, 0, 0, 1} do
+    if key == :addr and tuple_size(value) == 4 and value != @loopback_address do
       value |> Tuple.to_list() |> Enum.join(".")
     end
   end
