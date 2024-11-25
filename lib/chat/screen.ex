@@ -7,7 +7,20 @@ defmodule Chat.Screen do
   @start_input_x String.length(@prompt) + 1
 
   def setup do
-    :shell.start_interactive({:noshell, :raw})
+    case Integer.parse(System.otp_release()) do
+      {version, _} when version < 28 ->
+        msg = """
+        This application relies on "raw mode" which is only supported in Erlang/OTP 28 or later.
+
+        << You are running Erlang/OTP version #{System.otp_release()} >>
+
+        See the README for more info.
+        """
+        IO.puts(msg)
+        System.halt(1)
+      _ ->
+        :shell.start_interactive({:noshell, :raw})
+    end
     # Enable alternate screen buffer
     :io.put_chars("\e[?1049h")
     render(Server.initial_state(), %{})
