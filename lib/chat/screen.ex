@@ -79,7 +79,7 @@ defmodule Chat.Screen do
     |> Enum.reverse()
     |> Enum.each(&print_message/1)
 
-    write([move(:bottom, @start_input_x, state)])
+    write(["\r\n", move(:bottom, @start_input_x, state)])
     state
   end
 
@@ -107,11 +107,13 @@ defmodule Chat.Screen do
 
   defp print_input(state) do
     write([
-      move(:bottom, :left, state),
+      move(state.height - 1, :left, state),
+      IO.ANSI.clear_line(),
+      IO.ANSI.cursor_down(1),
       IO.ANSI.clear_line(),
       color(state.color),
       @prompt <> visible_input(state),
-      IO.ANSI.reset()
+      IO.ANSI.reset(),
     ])
 
     state
