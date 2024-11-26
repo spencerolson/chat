@@ -3,7 +3,15 @@
 To start the application, run
 
 ```bash
+$ cd chat/
 $ mix run -e Chat.start
+```
+
+Alernatively, the project can be installed and run as an [escript](https://hexdocs.pm/mix/main/Mix.Tasks.Escript.Build.html):
+
+```bash
+$ mix escript.install github spencerolson/chat
+$ chat
 ```
 
 Once started, type `help` to see all options.
