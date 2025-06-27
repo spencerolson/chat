@@ -6,6 +6,12 @@ defmodule Chat do
   def start do
     Clustering.setup()
     Screen.setup()
+    show_help_menu()
     Input.process_input(&Server.handle_input/1)
+  end
+
+  defp show_help_menu do
+    Server.handle_input("help")
+    Server.handle_input("\r")
   end
 end
